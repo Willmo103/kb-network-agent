@@ -1,2 +1,4 @@
+from kb_network_agent.cli import app
+
 def main() -> None:
-    print("Hello from kb-network-agent!")
+    app()

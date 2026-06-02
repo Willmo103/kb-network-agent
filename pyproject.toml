@@ -7,7 +7,17 @@ authors = [
     { name = "WIll Morris", email = "88165849+Willmo103@users.noreply.github.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "docker>=7.1.0",
+    "fastapi>=0.136.3",
+    "httpx>=0.28.1",
+    "psutil>=7.2.2",
+    "pydantic>=2.13.4",
+    "rich>=15.0.0",
+    "sqlite-utils>=3.39",
+    "typer>=0.26.6",
+    "uvicorn>=0.48.0",
+]
 
 [project.scripts]
 kb-network-agent = "kb_network_agent:main"
@@ -15,3 +25,6 @@ kb-network-agent = "kb_network_agent:main"
 [build-system]
 requires = ["uv_build>=0.9.26,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
