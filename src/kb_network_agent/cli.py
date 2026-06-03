@@ -15,18 +15,25 @@ from rich.table import Table
 import psutil
 
 from kb_network_agent.agent import (
-    collect_telemetry, send_telemetry_to_server, TelemetryCacheManager,
-    KB_ROOT, CONFIG_FILE, ensure_kb_dirs
+    collect_telemetry,
+    send_telemetry_to_server,
+    TelemetryCacheManager,
+    KB_ROOT,
+    CONFIG_FILE,
+    ensure_kb_dirs,
 )
 from kb_network_agent.tasks import TaskRunner, validate_task_json
 
-app = typer.Typer(help="kb-network-agent CLI for telemetry monitoring and task execution.")
+app = typer.Typer(
+    help="kb-network-agent CLI for telemetry monitoring and task execution."
+)
 tasks_app = typer.Typer(help="Manage and run custom tasks.")
 app.add_typer(tasks_app, name="tasks")
 
 console = Console()
 PID_FILE = KB_ROOT / "kb-network-agent.pid"
 LOG_FILE = KB_ROOT / "kb-network-agent.log"
+
 
 def load_config() -> dict:
     if CONFIG_FILE.exists():
@@ -39,16 +46,19 @@ def load_config() -> dict:
         "server_url": "http://localhost:8082",
         "api_token": "dev_token_123",
         "port": 8081,
-        "interval_seconds": 60
+        "interval_seconds": 60,
     }
+
 
 def save_config(config: dict):
     ensure_kb_dirs()
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=2)
 
+
 def is_pid_running(pid: int) -> bool:
     return psutil.pid_exists(pid)
+
 
 # ----------------------------------------------------
 # Main Agent daemon loop
@@ -61,7 +71,7 @@ def telemetry_loop():
             data = collect_telemetry()
             server_url = config.get("server_url")
             token = config.get("api_token")
-            
+
             if server_url and token:
                 # Attempt sending
                 success = send_telemetry_to_server(server_url, token, data)
@@ -76,35 +86,43 @@ def telemetry_loop():
                 cache_mgr.cache_telemetry(data)
         except Exception as e:
             logging.error(f"Error in telemetry loop: {e}")
-            
+
         config = load_config()
         time.sleep(config.get("interval_seconds", 60))
+
 
 @app.command(hidden=True)
 def run_daemon():
     """Runs the uvicorn API server and the telemetry loop in the foreground."""
     ensure_kb_dirs()
-    
+
     # Configure file logging
     log_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
     file_handler = logging.FileHandler(LOG_FILE)
     file_handler.setFormatter(log_formatter)
-    
+
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     root_logger.addHandler(file_handler)
-    
+
     # Start telemetry collector thread
     t = threading.Thread(target=telemetry_loop, daemon=True)
     t.start()
-    
+
     # Start FastAPI server
     config = load_config()
     import uvicorn
+
     logger = logging.getLogger("uvicorn")
     logger.addHandler(file_handler)
-    
-    uvicorn.run("kb_network_agent.api:app", host="0.0.0.0", port=config.get("port", 8081), log_level="info")
+
+    uvicorn.run(
+        "kb_network_agent.api:app",
+        host="0.0.0.0",
+        port=config.get("port", 8081),
+        log_level="info",
+    )
+
 
 # ----------------------------------------------------
 # Service Management Commands
@@ -116,14 +134,16 @@ def start():
         try:
             pid = int(PID_FILE.read_text().strip())
             if is_pid_running(pid):
-                console.print(f"[yellow]Daemon is already running (PID: {pid}).[/yellow]")
+                console.print(
+                    f"[yellow]Daemon is already running (PID: {pid}).[/yellow]"
+                )
                 raise typer.Exit()
         except ValueError:
             pass
 
     console.print("Starting kb-network-agent daemon...")
     python_exe = sys.executable
-    
+
     if sys.platform == "win32":
         # Resolve pythonw from virtual environment prefix first
         venv_pythonw = Path(sys.prefix) / "Scripts" / "pythonw.exe"
@@ -136,13 +156,13 @@ def start():
             pythonw = sys.executable.replace("python.exe", "pythonw.exe")
             if not os.path.exists(pythonw):
                 pythonw = sys.executable
-        
+
         # Detach cmd window completely using creationflags
         DETACHED_PROCESS = 0x00000008
         proc = subprocess.Popen(
             [pythonw, "-m", "kb_network_agent.cli", "run-daemon"],
             creationflags=DETACHED_PROCESS,
-            close_fds=True
+            close_fds=True,
         )
         pid = proc.pid
     else:
@@ -152,12 +172,13 @@ def start():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             preexec_fn=os.setpgrp,
-            close_fds=True
+            close_fds=True,
         )
         pid = proc.pid
 
     PID_FILE.write_text(str(pid))
     console.print(f"[green]Daemon started in background (PID: {pid}).[/green]")
+
 
 @app.command()
 def stop():
@@ -165,16 +186,18 @@ def stop():
     if not PID_FILE.exists():
         console.print("[yellow]No daemon PID file found. Is it running?[/yellow]")
         return
-        
+
     try:
         pid = int(PID_FILE.read_text().strip())
         if is_pid_running(pid):
             console.print(f"Stopping daemon (PID: {pid})...")
             if sys.platform == "win32":
-                subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True)
+                subprocess.run(
+                    ["taskkill", "/F", "/PID", str(pid)], capture_output=True
+                )
             else:
                 os.kill(pid, signal.SIGTERM)
-            
+
             # Wait for shutdown
             for _ in range(5):
                 if not is_pid_running(pid):
@@ -189,12 +212,14 @@ def stop():
         if PID_FILE.exists():
             PID_FILE.unlink()
 
+
 @app.command()
 def restart():
     """Restarts the agent daemon process."""
     stop()
     time.sleep(1)
     start()
+
 
 @app.command()
 def status():
@@ -203,11 +228,14 @@ def status():
         try:
             pid = int(PID_FILE.read_text().strip())
             if is_pid_running(pid):
-                console.print(f"[green]kb-network-agent daemon is running (PID: {pid}).[/green]")
+                console.print(
+                    f"[green]kb-network-agent daemon is running (PID: {pid}).[/green]"
+                )
                 return
         except ValueError:
             pass
     console.print("[red]kb-network-agent daemon is stopped.[/red]")
+
 
 @app.command()
 def logs(lines: int = typer.Option(50, help="Number of lines to show.")):
@@ -220,41 +248,60 @@ def logs(lines: int = typer.Option(50, help="Number of lines to show.")):
         for line in log_lines[-lines:]:
             print(line, end="")
 
+
 @app.command()
 def install(
-    server_url: str = typer.Option("http://localhost:8082", prompt=True, help="Central monitoring server URL"),
-    api_token: str = typer.Option("dev_token_123", prompt=True, help="Secure API token to authorize agent"),
-    port: int = typer.Option(8081, prompt=True, help="Local agent port to run API server on"),
-    interval: int = typer.Option(60, prompt=True, help="Polling interval in seconds")
+    server_url: str = typer.Option(
+        "http://localhost:8082", prompt=True, help="Central monitoring server URL"
+    ),
+    api_token: str = typer.Option(
+        "dev_token_123", prompt=True, help="Secure API token to authorize agent"
+    ),
+    port: int = typer.Option(
+        8081, prompt=True, help="Local agent port to run API server on"
+    ),
+    interval: int = typer.Option(60, prompt=True, help="Polling interval in seconds"),
 ):
     """Installs the agent configurations and registers it to startup."""
     config = {
         "server_url": server_url,
         "api_token": api_token,
         "port": port,
-        "interval_seconds": interval
+        "interval_seconds": interval,
     }
     save_config(config)
     console.print(f"[green]Configurations saved to {CONFIG_FILE}[/green]")
 
     # Setup OS startup triggers
     if sys.platform == "win32":
-        startup_dir = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+        startup_dir = (
+            Path(os.environ["APPDATA"])
+            / "Microsoft"
+            / "Windows"
+            / "Start Menu"
+            / "Programs"
+            / "Startup"
+        )
         bat_file = startup_dir / "kb-network-agent-launcher.bat"
         python_exe = sys.executable
         # Create silent launcher bat file using pythonw
         pythonw = python_exe.replace("python.exe", "pythonw.exe")
         if not os.path.exists(pythonw):
             pythonw = python_exe
-        
+
         bat_content = f'@echo off\nstart "" "{pythonw}" -m kb_network_agent.cli start\n'
         try:
             bat_file.write_text(bat_content)
-            console.print(f"[green]Registered startup batch script in {bat_file}[/green]")
+            console.print(
+                f"[green]Registered startup batch script in {bat_file}[/green]"
+            )
         except Exception as e:
             console.print(f"[red]Failed to register startup batch script: {e}[/red]")
     else:
-        console.print("[yellow]On Linux/macOS, please configure kb-network-agent as a systemd service or launchd agent.[/yellow]")
+        console.print(
+            "[yellow]On Linux/macOS, please configure kb-network-agent as a systemd service or launchd agent.[/yellow]"
+        )
+
 
 @app.command()
 def update():
@@ -265,6 +312,7 @@ def update():
         console.print("[green]Agent successfully updated.[/green]")
     except Exception as e:
         console.print(f"[red]Failed to update agent: {e}[/red]")
+
 
 # ----------------------------------------------------
 # Task Runner subcommands
@@ -277,16 +325,17 @@ def tasks_list():
     if not tasks:
         console.print("No tasks configured.")
         return
-        
+
     table = Table(title="Imported Tasks")
     table.add_column("Name", style="cyan")
     table.add_column("Version", style="magenta")
     table.add_column("Description")
     table.add_column("Target Type", style="green")
-    
+
     for t in tasks:
         table.add_row(t["name"], t["version"], t["description"], t["target"]["type"])
     console.print(table)
+
 
 @tasks_app.command(name="validate")
 def tasks_validate(path: Path):
@@ -294,7 +343,7 @@ def tasks_validate(path: Path):
     if not path.exists():
         console.print(f"[red]File {path} does not exist.[/red]")
         raise typer.Exit(1)
-        
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -310,13 +359,14 @@ def tasks_validate(path: Path):
         console.print(f"[red]Error reading file: {e}[/red]")
         raise typer.Exit(1)
 
+
 @tasks_app.command(name="add")
 def tasks_add(path: Path):
     """Imports and validates a new task definition into the agent."""
     if not path.exists():
         console.print(f"[red]File {path} does not exist.[/red]")
         raise typer.Exit(1)
-        
+
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -334,6 +384,7 @@ def tasks_add(path: Path):
         console.print(f"[red]Error importing task: {e}[/red]")
         raise typer.Exit(1)
 
+
 @tasks_app.command(name="remove")
 def tasks_remove(name: str):
     """Removes a task from the agent."""
@@ -343,10 +394,13 @@ def tasks_remove(name: str):
     else:
         console.print(f"[red]Task '{name}' not found.[/red]")
 
+
 @tasks_app.command(name="run")
 def tasks_run(
     name: str,
-    params: Optional[str] = typer.Option(None, help="JSON string representing parameter key/value overrides")
+    params: Optional[str] = typer.Option(
+        None, help="JSON string representing parameter key/value overrides"
+    ),
 ):
     """Executes a task locally on the agent."""
     runner = TaskRunner()
@@ -357,15 +411,22 @@ def tasks_run(
         except Exception as e:
             console.print(f"[red]Invalid params JSON: {e}[/red]")
             raise typer.Exit(1)
-            
+
     console.print(f"Executing task '{name}'...")
     success, logs = runner.run_task(name, param_dict)
     for log in logs:
-        style = "green" if "SUCCESS" in log else ("red" if "failed" in log.lower() or "rollback" in log.lower() else None)
+        style = (
+            "green"
+            if "SUCCESS" in log
+            else (
+                "red" if "failed" in log.lower() or "rollback" in log.lower() else None
+            )
+        )
         console.print(log, style=style)
-        
+
     if not success:
         raise typer.Exit(1)
+
 
 @tasks_app.command(name="view")
 def tasks_view(name: str):
@@ -376,6 +437,7 @@ def tasks_view(name: str):
         console.print(f"[red]Task '{name}' not found.[/red]")
         raise typer.Exit(1)
     console.print_json(data=task.model_dump())
+
 
 if __name__ == "__main__":
     app()

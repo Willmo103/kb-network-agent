@@ -20,6 +20,7 @@ TASKS_DIR = KB_ROOT / "tasks"
 # Pydantic Schema definitions for programmatic validation
 # ----------------------------------------------------
 
+
 class TargetSpec(BaseModel):
     type: str  # host, service, os, all
     criteria: Optional[Dict[str, Any]] = None
@@ -31,6 +32,7 @@ class TargetSpec(BaseModel):
         if v not in allowed:
             raise ValueError(f"target.type must be one of {allowed}")
         return v
+
 
 class ParameterSpec(BaseModel):
     type: str  # string, number, boolean, array, object
@@ -45,6 +47,7 @@ class ParameterSpec(BaseModel):
         if v not in allowed:
             raise ValueError(f"parameter type must be one of {allowed}")
         return v
+
 
 class ActionSpec(BaseModel):
     type: str  # script, command, api_call
@@ -69,6 +72,7 @@ class ActionSpec(BaseModel):
                 raise ValueError(f"action.interpreter must be one of {allowed}")
         return v
 
+
 class ScriptSpec(BaseModel):
     script: Optional[str] = None
     interpreter: Optional[str] = None
@@ -82,6 +86,7 @@ class ScriptSpec(BaseModel):
             if v not in allowed:
                 raise ValueError(f"interpreter must be one of {allowed}")
         return v
+
 
 class TaskSpec(BaseModel):
     name: str
@@ -97,8 +102,11 @@ class TaskSpec(BaseModel):
     @classmethod
     def validate_name(cls, v):
         if not re.match(r"^[a-z0-9_]+$", v):
-            raise ValueError("task.name must be snake_case (lowercase letters, numbers, and underscores)")
+            raise ValueError(
+                "task.name must be snake_case (lowercase letters, numbers, and underscores)"
+            )
         return v
+
 
 class TaskEnvelope(BaseModel):
     task: TaskSpec
@@ -118,7 +126,9 @@ def validate_task_json(json_str: str) -> Tuple[bool, List[str]]:
             errors.append(f"[{loc_str}]: {error['msg']} (input: {error.get('input')})")
         return False, errors
     except json.JSONDecodeError as jde:
-        return False, [f"Invalid JSON syntax: {jde.msg} at line {jde.lineno} col {jde.colno}"]
+        return False, [
+            f"Invalid JSON syntax: {jde.msg} at line {jde.lineno} col {jde.colno}"
+        ]
     except Exception as ex:
         return False, [f"Unknown validation error: {str(ex)}"]
 
@@ -126,6 +136,7 @@ def validate_task_json(json_str: str) -> Tuple[bool, List[str]]:
 # ----------------------------------------------------
 # Task Runner implementation
 # ----------------------------------------------------
+
 
 class TaskRunner:
     def __init__(self, tasks_dir: Path = TASKS_DIR):
@@ -150,12 +161,14 @@ class TaskRunner:
             try:
                 with open(f, "r", encoding="utf-8") as file:
                     envelope = TaskEnvelope.model_validate_json(file.read())
-                    tasks.append({
-                        "name": envelope.task.name,
-                        "version": envelope.task.version,
-                        "description": envelope.task.description,
-                        "target": envelope.task.target.model_dump()
-                    })
+                    tasks.append(
+                        {
+                            "name": envelope.task.name,
+                            "version": envelope.task.version,
+                            "description": envelope.task.description,
+                            "target": envelope.task.target.model_dump(),
+                        }
+                    )
             except Exception:
                 continue
         return tasks
@@ -191,7 +204,9 @@ class TaskRunner:
             text = text.replace(f"{{{k}}}", str_val)
         return text
 
-    def _execute_script(self, script_content: str, interpreter: Optional[str], logs: List[str]) -> Tuple[int, str]:
+    def _execute_script(
+        self, script_content: str, interpreter: Optional[str], logs: List[str]
+    ) -> Tuple[int, str]:
         """Runs the script using the correct interpreter and returns (exit_code, stdout+stderr)."""
         suffix = ".sh"
         if sys.platform == "win32":
@@ -199,7 +214,9 @@ class TaskRunner:
         if interpreter in ["python", "python3"]:
             suffix = ".py"
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=suffix, delete=False, encoding="utf-8") as temp_file:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=suffix, delete=False, encoding="utf-8"
+        ) as temp_file:
             temp_file.write(script_content)
             temp_path = temp_file.name
 
@@ -215,7 +232,7 @@ class TaskRunner:
                 # Direct OS execution (shell = True)
                 cmd = temp_path
 
-            shell_mode = (sys.platform == "win32" and interpreter is None)
+            shell_mode = sys.platform == "win32" and interpreter is None
             res = subprocess.run(
                 cmd, capture_output=True, text=True, shell=shell_mode, timeout=60
             )
@@ -232,13 +249,15 @@ class TaskRunner:
                 except Exception:
                     pass
 
-    def run_task(self, name: str, user_params: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    def run_task(
+        self, name: str, user_params: Dict[str, Any]
+    ) -> Tuple[bool, List[str]]:
         task = self.load_task(name)
         if not task:
             return False, [f"Task '{name}' not found."]
 
         logs = [f"Starting execution of task '{name}' (v{task.version})"]
-        
+
         # 1. Resolve and validate parameters
         resolved_params = {}
         task_params = task.parameters or {}
@@ -256,7 +275,7 @@ class TaskRunner:
 
         for idx, action in enumerate(task.actions):
             logs.append(f"Running Action {idx + 1}/{len(task.actions)} ({action.type})")
-            
+
             if action.type in ["command", "script"]:
                 command_text = action.command
                 if not command_text:
@@ -264,13 +283,15 @@ class TaskRunner:
                     success = False
                     rollback_needed = True
                     break
-                
+
                 # Parameter substitution
                 exec_cmd = self._substitute_params(command_text, resolved_params)
-                
-                exit_code, output = self._execute_script(exec_cmd, action.interpreter, logs)
+
+                exit_code, output = self._execute_script(
+                    exec_cmd, action.interpreter, logs
+                )
                 logs.append(f"Result (Exit code: {exit_code}):\n{output}")
-                
+
                 if exit_code != 0:
                     success = False
                     rollback_needed = True
@@ -285,8 +306,12 @@ class TaskRunner:
         # 3. Validation
         if success and task.validation:
             logs.append("Running Validation Script...")
-            val_script = self._substitute_params(task.validation.script or "", resolved_params)
-            exit_code, output = self._execute_script(val_script, task.validation.interpreter, logs)
+            val_script = self._substitute_params(
+                task.validation.script or "", resolved_params
+            )
+            exit_code, output = self._execute_script(
+                val_script, task.validation.interpreter, logs
+            )
             logs.append(f"Validation Result (Exit code: {exit_code}):\n{output}")
             if exit_code != 0:
                 success = False
@@ -296,8 +321,12 @@ class TaskRunner:
         # 4. Rollback
         if rollback_needed and task.rollback:
             logs.append("Triggering Rollback...")
-            rb_script = self._substitute_params(task.rollback.script or "", resolved_params)
-            exit_code, output = self._execute_script(rb_script, task.rollback.interpreter, logs)
+            rb_script = self._substitute_params(
+                task.rollback.script or "", resolved_params
+            )
+            exit_code, output = self._execute_script(
+                rb_script, task.rollback.interpreter, logs
+            )
             logs.append(f"Rollback Result (Exit code: {exit_code}):\n{output}")
             if exit_code != 0:
                 logs.append("WARNING: Rollback execution failed.")

@@ -43,16 +43,19 @@ INVALID_TASK_NAME = """
 }
 """
 
+
 def test_valid_task_validation():
     valid, errors = validate_task_json(VALID_TASK)
     assert valid is True
     assert len(errors) == 0
+
 
 def test_invalid_task_validation():
     # 1. Invalid name (should be snake_case)
     valid, errors = validate_task_json(INVALID_TASK_NAME)
     assert valid is False
     assert any("task -> name" in err for err in errors)
+
 
 def test_parameter_substitution():
     runner = TaskRunner()

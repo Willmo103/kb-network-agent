@@ -1,19 +1,22 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
+
 class GPUInfo(BaseModel):
     name: str
     driver_version: Optional[str] = None
     memory_total: Optional[int] = None  # in MB
-    memory_used: Optional[int] = None   # in MB
+    memory_used: Optional[int] = None  # in MB
     utilization: Optional[float] = None  # percentage
+
 
 class DiskInfo(BaseModel):
     path: str
     total: int  # bytes
-    used: int   # bytes
-    free: int   # bytes
+    used: int  # bytes
+    free: int  # bytes
     percent: float
+
 
 class DockerContainer(BaseModel):
     id: str
@@ -22,11 +25,13 @@ class DockerContainer(BaseModel):
     status: str
     state: str
 
+
 class DockerStats(BaseModel):
     version: Optional[str] = None
     active_count: int
     total_count: int
     containers: List[DockerContainer] = []
+
 
 class OllamaModel(BaseModel):
     name: str
@@ -35,10 +40,12 @@ class OllamaModel(BaseModel):
     format: Optional[str] = None
     family: Optional[str] = None
 
+
 class OllamaStats(BaseModel):
     version: Optional[str] = None
     api_version: Optional[str] = None
     models: List[OllamaModel] = []
+
 
 class DatabaseStatus(BaseModel):
     type: str  # e.g. postgres, redis, sqlite, rabbitmq, minio, nginx
@@ -46,8 +53,10 @@ class DatabaseStatus(BaseModel):
     version: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
 
+
 class DatabaseStats(BaseModel):
     databases: List[DatabaseStatus] = []
+
 
 class PendingUpdate(BaseModel):
     name: str
@@ -55,10 +64,12 @@ class PendingUpdate(BaseModel):
     new_version: Optional[str] = None
     source: str  # e.g. apt, winget
 
+
 class SystemUpdates(BaseModel):
     pending_count: int
     updates: List[PendingUpdate] = []
     last_check: str
+
 
 class TelemetryData(BaseModel):
     hostname: str
@@ -70,8 +81,8 @@ class TelemetryData(BaseModel):
     cpu_percent: float
     cpu_cores: int
     ram_total: int  # bytes
-    ram_used: int   # bytes
-    ram_free: int   # bytes
+    ram_used: int  # bytes
+    ram_free: int  # bytes
     disks: List[DiskInfo] = []
     listening_ports: List[int] = []
     open_ports: List[int] = []
